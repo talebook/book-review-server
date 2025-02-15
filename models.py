@@ -90,8 +90,8 @@ class Reader(Base, SQLAlchemyMixin):
 
     __tablename__ = "readers"
     id = Column(Integer, primary_key=True)
-    email = Column(String(200))
-    nickname = Column(String(100))
+    email = Column(String(200), unique=True)
+    nickname = Column(String(100), unique=True)
     password = Column(String(200), default="")
     salt = Column(String(200))
     avatar = Column(String(200))
@@ -335,7 +335,6 @@ class Review(Base, SQLAlchemyMixin):
             d["quoteNickName"] = row.quote.user.nickname
         if current_user:
             d["isSelf"] = row.user_id == current_user.id
-        logging.error(d)
         return d
 
 
