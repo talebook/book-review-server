@@ -21,6 +21,7 @@ settings = {
     "cookie_expire" : 7*86400,
     "login_url"     : "/login",
     "user_database" : 'sqlite:////tmp/candle-reader.db',
+    # "user_database" : 'mysql+pymysql://calibre:calibre@db:3306/calibre',
     "site_title"    : "奇异书屋",
 
 
