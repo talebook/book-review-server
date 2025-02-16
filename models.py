@@ -14,6 +14,10 @@ from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, declarative_base
 
+import loader 
+
+CONF = loader.get_settings()
+
 
 def mksalt():
     import random
@@ -91,12 +95,12 @@ class Reader(Base, SQLAlchemyMixin):
     __tablename__ = "readers"
     id = Column(Integer, primary_key=True)
     email = Column(String(200), unique=True)
+    avatar = Column(String(200))
     nickname = Column(String(100), unique=True)
     password = Column(String(200), default="")
     salt = Column(String(200))
-    avatar = Column(String(200))
-    admin = Column(Boolean, default=False)
-    active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
     permission = Column(String(100), default="")
     create_time = Column(DateTime)
     update_time = Column(DateTime)
@@ -128,14 +132,6 @@ class Reader(Base, SQLAlchemyMixin):
 
         self.init(DefaultUserInfo())
 
-    def init(self, social_user):
-        self.nickname = self.get_social_nickname(social_user)
-        self.create_time = datetime.datetime.now()
-        self.update_time = datetime.datetime.now()
-        self.access_time = datetime.datetime.now()
-        self.extra = {"kindle_email": ""}
-        self.init_avatar(social_user)
-
     def reset_password(self):
         s = "%s%s%s" % (self.email, self.create_time.strftime("%s"), time.time())
         p = hashlib.md5(s.encode("UTF-8")).hexdigest()[:16]
@@ -150,29 +146,6 @@ class Reader(Base, SQLAlchemyMixin):
     def set_secure_password(self, raw_password):
         self.salt = mksalt()
         self.password = self.get_secure_password(raw_password)
-
-    def init_avatar(self, social_user):
-        anyone = "http://tva1.sinaimg.cn/default/images/default_avatar_male_50.gif"
-        url = social_user.extra_data.get("profile_image_url", anyone)
-        self.avatar = url.replace("http://q.qlogo.cn", "//q.qlogo.cn")
-
-        if social_user.provider == "github":
-            self.avatar = "https://avatars.githubusercontent.com/u/%s" % social_user.extra_data["id"]
-
-    def get_active_code(self):
-        return self.get_secure_password(self.create_time.strftime("%Y-%m-%d %H:%M:%S"))
-
-    def get_social_nickname(self, si):
-        for k in ["username", "login"]:
-            if k in si.extra_data:
-                return si.extra_data[k]
-        return "%s_%s" % (si.provider, si.uid)
-
-    def check_and_update(self, social_user):
-        name = self.get_social_nickname(social_user)
-        if self.nickname != name:
-            logging.info("userid[%s] nickname needs update to [%s]" % (self.id, name))
-            self.nickname = name
 
     def set_permission(self, operations):
         ALL = "delprsuv"
@@ -206,26 +179,20 @@ class Reader(Base, SQLAlchemyMixin):
     def can_login(self):
         return self.has_permission("l")
 
-    def can_push(self):
-        return self.has_permission("p")
+    def data(self):
+        gravatar_url = "https://www.gravatar.com"
+        avatar = self.avatar or ""
+        avatar = avatar.replace("http://", "https://").replace(gravatar_url, CONF["avatar_service"])
 
-    def can_read(self):
-        return self.has_permission("r")
-
-    def can_save(self):
-        return self.has_permission("s")
-
-    def can_upload(self):
-        return self.has_permission("u")
-
-    def can_view(self):
-        return self.has_permission("v")
-
-    def is_active(self):
-        return self.active
-
-    def is_admin(self):
-        return self.admin
+        return {
+            "id": self.id,
+            "email": self.email,
+            "nickname": self.nickname,
+            "avatar": self.avatar,
+            "permission": self.permission,
+            "create_time": self.create_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "update_time": self.update_time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
 
 
 class ReviewType:

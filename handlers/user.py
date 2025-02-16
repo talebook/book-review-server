@@ -29,30 +29,23 @@ class UserUpdate(BaseHandler):
             if len(nickname) > 0:
                 if len(nickname) < 3:
                     return {"err": "params.nickname.invalid", "msg": _(u"昵称无效")}
-                user.name = nickname
+                user.nickname = nickname
 
         p0 = data.get("password0", "").strip()
         p1 = data.get("password1", "").strip()
-        p2 = data.get("password2", "").strip()
         if len(p0) > 0:
             if user.get_secure_password(p0) != user.password:
                 return {"err": "params.password.error", "msg": _(u"密码错误")}
-            if p1 != p2 or len(p1) < 8 or len(p1) > 20 or not re.match(Reader.RE_PASSWORD, p1):
+            if len(p1) < 8 or len(p1) > 20 or not re.match(Reader.RE_PASSWORD, p1):
                 return {"err": "params.password.invalid", "msg": _(u"密码无效")}
             user.set_secure_password(p1)
 
-        ke = data.get("kindle_email", "").strip()
-        if len(ke) > 0:
-            if not re.match(Reader.RE_EMAIL, ke):
-                return {"err": "params.email.invalid", "msg": _(u"Kindle地址无效")}
-            user.extra["kindle_email"] = ke
-
         try:
             user.save()
-            self.add_msg("success", _("Settings saved."))
-            return {"err": "ok"}
         except:
             return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
+
+        return {"err": "ok", "data": user.data()}
 
 
 class SignUp(BaseHandler):
@@ -79,7 +72,7 @@ class SignUp(BaseHandler):
             return {"err": "params.invalid", "msg": _(u"用户名或密码无效")}
         if not re.match(Reader.RE_EMAIL, email):
             return {"err": "params.email.invalid", "msg": _(u"Email无效")}
-        if len(nickname) < 5 or len(nickname) > 50:
+        if len(nickname) < 2 or len(nickname) > 50:
             return {"err": "params.nickname.invalid", "msg": _(u"用户名无效")}
 
         user = self.session.query(Reader).filter(Reader.email == email).first()
@@ -93,7 +86,7 @@ class SignUp(BaseHandler):
         user.create_time = datetime.datetime.now()
         user.update_time = datetime.datetime.now()
         user.access_time = datetime.datetime.now()
-        user.active = True
+        user.is_active = True
         user.extra = {"kindle_email": ""}
         password = user.reset_password()
 
@@ -107,7 +100,7 @@ class SignUp(BaseHandler):
 
         self.send_notice_email(user, password)
 
-        return {"err": "ok"}
+        return {"err": "ok", "msg": "ok"}
 
 
 class SignIn(BaseHandler):
@@ -127,7 +120,7 @@ class SignIn(BaseHandler):
         logging.debug("PERM = %s", user.permission)
 
         self.login_user(user)
-        return {"err": "ok", "msg": "ok"}
+        return {"err": "ok", "msg": "ok", "data": user.data()}
 
 
 class UserReset(SignUp):
@@ -161,66 +154,13 @@ class SignOut(BaseHandler):
 
 
 class UserInfo(BaseHandler):
-    def get_sys_info(self):
-        from sqlalchemy import func
-
-        last_week = datetime.datetime.now() - datetime.timedelta(days=7)
-        count_all_users = self.session.query(func.count(Reader.id)).scalar()
-        count_hot_users = self.session.query(func.count(Reader.id)).filter(Reader.access_time > last_week).scalar()
-        return {
-            "users": count_all_users,
-            "active": count_hot_users,
-            "version": os.environ.get("VERSION", "0.0.0"),
-            "title": CONF["site_title"],
-            "footer": CONF["FOOTER"],
-            "header": CONF["HEADER"],
-            "allow": {
-                "register": CONF["ALLOW_REGISTER"],
-            },
-        }
-
-    def get_user_info(self, detail):
-        user = self.current_user
-        d = {
-            "avatar": "https://tva1.sinaimg.cn/default/images/default_avatar_male_50.gif",
-            "is_login": False,
-            "is_admin": False,
-            "nickname": "",
-            "email": "",
-            "kindle_email": "",
-            "extra": {},
-        }
-
-        if not user:
-            return d
-
-        d.update(
-            {
-                "is_login": True,
-                "is_admin": user.is_admin(),
-                "is_active": user.is_active(),
-                "nickname": user.nickname or "",
-                "email": user.email,
-                "extra": {},
-                "create_time": user.create_time.strftime("%Y-%m-%d %H:%M:%S"),
-            }
-        )
-        if user.avatar:
-            gravatar_url = "https://www.gravatar.com"
-            d["avatar"] = user.avatar.replace("http://", "https://").replace(gravatar_url, CONF["avatar_service"])
-        return d
-
     @js
+    @auth
     def get(self):
-        if CONF.get("installed", None) is False:
-            return {"err": "not_installed"}
-
-        detail = self.get_argument("detail", "")
         rsp = {
             "err": "ok",
-            "cdn": self.cdn_url,
-            "sys": self.get_sys_info() if not detail else {},
-            "user": self.get_user_info(detail),
+            "msg": "ok",
+            "data": self.current_user.data(),
         }
         return rsp
 

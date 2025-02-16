@@ -62,17 +62,6 @@ def auth(func):
     return do
 
 
-def is_admin(func):
-    def do(self, *args, **kwargs):
-        if not self.current_user:
-            return {"err": "user.need_login", "msg": _(u"请先登录")}
-        if not self.admin_user:
-            return {"err": "permission.not_admin", "msg": _(u"当前用户非管理员")}
-        return func(self, *args, **kwargs)
-
-    return do
-
-
 class BaseHandler(web.RequestHandler):
     _path_to_env = {}
 
@@ -188,21 +177,14 @@ class BaseHandler(web.RequestHandler):
         user_id = self.user_id()
         if user_id:
             user_id = int(user_id)
-        user = self.session.get(Reader, user_id) if user_id else None
-
-        admin_id = self.get_secure_cookie("admin_id")
-        if admin_id:
-            self.admin_user = self.session.get(Reader, int(admin_id))
-        elif user and user.is_admin():
-            self.admin_user = user
-        return user
+        return self.session.get(Reader, user_id) if user_id else None
 
     def is_admin(self):
         if self.admin_user:
             return True
         if not self.current_user:
             return False
-        return self.current_user.is_admin()
+        return self.current_user.is_admin
 
     def login_user(self, user):
         logging.info("LOGIN: %s - %d - %s" % (self.request.remote_ip, user.id, user.email))
