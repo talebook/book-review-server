@@ -51,7 +51,6 @@ def make_app():
     # build sql session factory
     engine = create_engine(auth_db_path, **CONF["db_engine_args"])
     ScopedSession = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
-    models.bind_session(ScopedSession)
 
     if options.syncdb:
         models.user_syncdb(engine)

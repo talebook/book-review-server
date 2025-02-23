@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
-import logging
 import datetime
 from gettext import gettext as _
 
@@ -129,7 +128,7 @@ class ReviewAdd(BaseHandler):
 
         if chapter is None:
             chapter = ReviewChapter(book_id=book_id, title=name, alias=chapter_name)
-            chapter.save()
+            self.session.add(chapter)
 
         n = (
             self.session.query(Review)
@@ -148,21 +147,18 @@ class ReviewAdd(BaseHandler):
         review.user_id = self.current_user.id
         review.create_time = datetime.datetime.now()
         review.update_time = review.create_time
-        try:
-            review.save()
-            self.session.commit()
-        except:
-            logging.exception("save review fail")
-            self.session.rollback()
+        self.session.add(review)
 
         if review.quote_id:
             review.quote.update_time = datetime.datetime.now()
-            review.quote.save()
+            self.session.add(review.quote)
 
         if review.root_id:
             review.root.update_time = datetime.datetime.now()
-            review.root.save()
+            self.session.add(review.root)
 
+        if not self.commit():
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
         return {"err": "ok", "data": review.to_full_dict(self.current_user)}
 
 
@@ -173,7 +169,7 @@ class ReviewMe(BaseHandler):
     @auth
     def get(self):
         is_count = self.get_argument("count", "").strip() != ""
-        last_read = self.current_user.extra.get("last_read", "")
+        last_read = self.current_user.last_read
         q = self.session.query(Review).filter(Review.user_id == self.current_user.id)
         if last_read:
             q = q.filter(Review.update_time > last_read)
@@ -208,7 +204,10 @@ class ReviewGetBook(BaseHandler):
         row = ReviewBook()
         row.title = title
         row.alias = title
-        row.save()
+        self.session.add(row)
+
+        if not self.commit():
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
         return {"err": "ok", "data": row.to_dict()}
 
 

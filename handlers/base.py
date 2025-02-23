@@ -191,8 +191,8 @@ class BaseHandler(web.RequestHandler):
         self.set_secure_cookie("user_id", str(user.id))
         self.set_secure_cookie("lt", str(int(time.time())))
         user.access_time = datetime.datetime.now()
-        user.extra["login_ip"] = self.request.remote_ip
-        user.save()
+        self.session.add(user)
+        self.session.commit()
 
     def last_modified(self, updated):
         """
@@ -250,10 +250,8 @@ class BaseHandler(web.RequestHandler):
         self.set_header("Cache-Control", "max-age=0")
         request = self.request
         request.user = self.current_user
-        request.user_extra = {}
         request.admin_user = self.admin_user
         if request.user:
-            request.user_extra = self.current_user.extra
             if not request.user.avatar:
                 request.user.avatar = "//tva1.sinaimg.cn/default/images/default_avatar_male_50.gif"
             else:
@@ -274,3 +272,12 @@ class BaseHandler(web.RequestHandler):
         vals.update(vars())
         del vals["self"]
         self.write(self.render_string(template, **vals))
+
+    def commit(self):
+        try:
+            self.session.commit()
+            return True
+        except:
+            logging.exception("db commit fail")
+            self.session.rollback()
+            return False

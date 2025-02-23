@@ -5,7 +5,6 @@ import datetime
 import hashlib
 import logging
 import re
-import os
 
 import tornado.escape
 from gettext import gettext as _
@@ -38,13 +37,13 @@ class UserUpdate(BaseHandler):
                 return {"err": "params.password.error", "msg": _(u"密码错误")}
             if len(p1) < 8 or len(p1) > 20 or not re.match(Reader.RE_PASSWORD, p1):
                 return {"err": "params.password.invalid", "msg": _(u"密码无效")}
+            logging.info(f'{user.nickname} 更改密码为 {p1}')
             user.set_secure_password(p1)
 
-        try:
-            user.save()
-        except:
-            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
+        self.session.add(user)
 
+        if not self.commit():
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
         return {"err": "ok", "data": user.data()}
 
 
@@ -87,19 +86,13 @@ class SignUp(BaseHandler):
         user.update_time = datetime.datetime.now()
         user.access_time = datetime.datetime.now()
         user.is_active = True
-        user.extra = {"kindle_email": ""}
         password = user.reset_password()
+        self.session.add(user)
 
-        try:
-            user.save()
-        except:
-            import traceback
-
-            logging.error(traceback.format_exc())
-            return {"err": "db.error", "msg": _(u"系统异常，请重试或更换注册信息")}
+        if not self.commit():
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
 
         self.send_notice_email(user, password)
-
         return {"err": "ok", "msg": "ok"}
 
 
@@ -133,12 +126,10 @@ class UserReset(SignUp):
         if not user:
             return {"err": "params.no_user", "msg": _(u"无此用户")}
         password = user.reset_password()
+        self.session.add(user)
 
-        # do save into db
-        try:
-            user.save()
-        except:
-            return {"err": "db.error", "msg": _(u"系统繁忙")}
+        if not self.commit():
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
 
         self.send_notice_email(user, password)
         return {"err": "ok"}

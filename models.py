@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
-import datetime
 import hashlib
-import logging
 import time
 import json
 import re
 from gettext import gettext as _
 
-from social_sqlalchemy.storage import JSONType, SQLAlchemyMixin
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
-from sqlalchemy.ext.mutable import Mutable
 from sqlalchemy.orm import relationship, declarative_base
 
-import loader 
+import loader
 
 CONF = loader.get_settings()
+Base = declarative_base()
 
 
 def mksalt():
@@ -32,18 +29,6 @@ def mksalt():
     return "".join(salt)
 
 
-Base = declarative_base()
-
-
-def bind_session(session):
-    def _session(self):
-        return session
-
-    Base._session = classmethod(_session)
-    SQLAlchemyMixin._session = classmethod(_session)
-    logging.info("Bind modles._session()")
-
-
 def to_dict(self):
     return {c.name: getattr(self, c.name, None) for c in self.__table__.columns}
 
@@ -51,33 +36,7 @@ def to_dict(self):
 Base.to_dict = to_dict
 
 
-class MutableDict(Mutable, dict):
-    @classmethod
-    def coerce(cls, key, value):
-        "Convert plain dictionaries to MutableDict."
-        if isinstance(value, MutableDict):
-            return value
-        if isinstance(value, dict):
-            return MutableDict(value)
-        return Mutable.coerce(key, value)
-
-    def __setitem__(self, key, value):
-        "Detect dictionary set events and emit change events."
-        dict.__setitem__(self, key, value)
-        self.changed()
-
-    def __delitem__(self, key):
-        "Detect dictionary del events and emit change events."
-        dict.__delitem__(self, key)
-        self.changed()
-
-    def __getitem__(self, key):
-        if not dict.__contains__(self, key):
-            return ""
-        return dict.__getitem__(self, key)
-
-
-class Reader(Base, SQLAlchemyMixin):
+class Reader(Base):
     # 权限位
     SPECIAL = 0b00000001  # 未开启说明是默认权限
     LOGIN = 0b00000010  # 登录
@@ -105,32 +64,10 @@ class Reader(Base, SQLAlchemyMixin):
     create_time = Column(DateTime)
     update_time = Column(DateTime)
     access_time = Column(DateTime)
-    extra = Column(MutableDict.as_mutable(JSONType), default={})
+    last_read = Column(DateTime)
 
     def __str__(self):
         return "<id=%d, email=%s>" % (self.id, self.email)
-
-    def shrink_column_extra(self):
-        # check whether the length of `extra` column is out of limit 32KB
-        text = json.dumps(self.extra)
-        shrink = min(self.OVERSIZE_SHRINK_RATE, self.SQLITE_MAX_LENGTH / len(text))
-        if len(text) > self.SQLITE_MAX_LENGTH:
-            for k, v in self.extra.items():
-                if k.endswith("_history") and isinstance(v, list):
-                    new_length = int(len(v) * shrink)
-                    self.extra[k] = v[:new_length]
-
-    def save(self):
-        self.shrink_column_extra()
-        return super().save()
-
-    def init_default_user(self):
-        class DefaultUserInfo:
-            extra_data = {"name": _("默认用户")}
-            provider = "qq"
-            uid = 123456789
-
-        self.init(DefaultUserInfo())
 
     def reset_password(self):
         s = "%s%s%s" % (self.email, self.create_time.strftime("%s"), time.time())
@@ -207,14 +144,14 @@ class ReviewStatus:
     deleted = 3
 
 
-class ReviewBook(Base, SQLAlchemyMixin):
+class ReviewBook(Base):
     __tablename__ = "review_books"
     id = Column(Integer, primary_key=True)
     title = Column(String(255), default="")
     alias = Column(String(5120), default="")
 
 
-class ReviewChapter(Base, SQLAlchemyMixin):
+class ReviewChapter(Base):
     __tablename__ = "review_chapters"
     id = Column(Integer, primary_key=True)
     book_id = Column(Integer, default=0)
@@ -230,7 +167,7 @@ class ReviewChapter(Base, SQLAlchemyMixin):
         return s
 
 
-class Review(Base, SQLAlchemyMixin):
+class Review(Base):
     __tablename__ = "reviews"
     id = Column(Integer, primary_key=True)
     book_id = Column(Integer, default=0)  # 书籍 ID
