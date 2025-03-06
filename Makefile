@@ -12,5 +12,5 @@ lint:
 
 up:
 	python3 main.py --syncdb
-	python3 main.py --port=8080 --host=0.0.0.0 --logging=debug --log-file-prefix=/tmp/brs.log
+	python3 main.py --port=5002 --host=0.0.0.0 --logging=debug --log-file-prefix=/tmp/brs.log
 
