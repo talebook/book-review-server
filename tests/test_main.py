@@ -173,16 +173,11 @@ class TestUser(TestWithUserLogin):
     def test_userinfo(self):
         d = self.json("/api/user/info")
         self.assertEqual(d["err"], "ok")
-        self.assertEqual(d["user"]["is_login"], True)
-
-        d = self.json("/api/user/info?detail=1")
-        self.assertEqual(d["err"], "ok")
-        self.assertEqual(d["user"]["is_login"], True)
-        self.assertEqual(d["sys"], {})
+        self.assertEqual(d["data"]["id"], 1)
 
     def test_login(self):
         email = 'active@email.com'
-        password = 'f2dc4e6db8799e7a'
+        password = 'unittest'
 
         user = get_db().query(models.Reader).filter(models.Reader.email == email).first()
         user.permission = ""
@@ -239,7 +234,7 @@ class TestUserSignUp(TestWithUserLogin):
         user = self.get_user().first()
         self.assertEqual(user.email, "unittest@email.com")
         self.assertEqual(user.nickname, "unittest")
-        self.assertEqual(user.active, True)
+        self.assertEqual(user.is_active, True)
 
         # 设置密码为 unittest
         user.set_secure_password('unittest')

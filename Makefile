@@ -1,5 +1,8 @@
 .PHONY: all build push test
 
+LATEST := talebook/book-review-server:latest
+VERSION := $(shell git describe --tag)
+
 all: test up
 
 test: lint
@@ -13,4 +16,7 @@ lint:
 up:
 	python3 main.py --syncdb
 	python3 main.py --port=5002 --host=0.0.0.0 --logging=debug --log-file-prefix=/tmp/brs.log
+
+docker: Dockerfile
+	docker build --network=host --build-arg GIT_VERSION=$(VERSION) -t $(LATEST) .
 

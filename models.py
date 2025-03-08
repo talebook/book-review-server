@@ -3,9 +3,7 @@
 
 import hashlib
 import time
-import json
 import re
-from gettext import gettext as _
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship, declarative_base
