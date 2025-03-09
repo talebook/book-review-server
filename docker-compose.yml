@@ -1,0 +1,19 @@
+services:
+  server:
+    image: talebook/book-review-server
+    # restart: always
+    ports:
+      - "5002:80"
+    depends_on:
+      - mysql
+
+  mysql:
+    image: mysql:8.0
+    # restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: talebook-is-best
+      MYSQL_DATABASE: brs
+      MYSQL_USER: brs
+      MYSQL_PASSWORD: brs-is-best
+    volumes:
+      - /tmp/brs-db:/var/lib/mysql

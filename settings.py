@@ -20,8 +20,8 @@ settings = {
     "cookie_secret" : "cookie_secret",
     "cookie_expire" : 7*86400,
     "login_url"     : "/login",
-    "user_database" : 'sqlite:////tmp/candle-reader.db',
-    # "user_database" : 'mysql+pymysql://brs:brs-is-best@mysql:3306/brs',
+    # "user_database" : 'sqlite:////tmp/candle-reader.db',
+    "user_database" : 'mysql+pymysql://brs:brs-is-best@mysql:3306/brs',
     "site_title"    : "奇异书屋",
 
 
