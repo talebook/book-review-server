@@ -9,8 +9,6 @@ import time
 from collections import defaultdict
 from gettext import gettext as _
 
-from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import func as sql_func
 from tornado import web
 
 import loader
@@ -217,61 +215,6 @@ class BaseHandler(web.RequestHandler):
             12: "Dec",
         }
         return lm.replace("month", month[updated.month])
-
-    def get_template_path(self):
-        """获取模板路径"""
-        return CONF.get("resource_path", "templates")
-
-    def create_template_loader(self, template_path):
-        """根据template_path创建相对应的Jinja2 Environment"""
-        temp_path = template_path
-        if isinstance(template_path, (list, tuple)):
-            temp_path = template_path[0]
-
-        env = BaseHandler._path_to_env.get(temp_path)
-        if not env:
-            logging.debug("create template env for [%s]" % template_path)
-            _loader = FileSystemLoader(template_path)
-            env = Environment(loader=_loader)
-            env.filters["day"] = day_format
-            # env.globals['gettext'] = _
-            BaseHandler._path_to_env[temp_path] = env
-        return env
-
-    def render_string(self, template_name, **kwargs):
-        """使用Jinja2模板引擎"""
-        env = self.create_template_loader(self.get_template_path())
-        t = env.get_template(template_name)
-        namespace = self.get_template_namespace()
-        namespace.update(kwargs)
-        return t.render(**namespace)
-
-    def html_page(self, template, *args, **kwargs):
-        self.set_header("Cache-Control", "max-age=0")
-        request = self.request
-        request.user = self.current_user
-        request.admin_user = self.admin_user
-        if request.user:
-            if not request.user.avatar:
-                request.user.avatar = "//tva1.sinaimg.cn/default/images/default_avatar_male_50.gif"
-            else:
-                request.user.avatar = request.user.avatar.replace("http://", "//")
-
-        last_week = datetime.datetime.now() - datetime.timedelta(days=7)
-        page_vars = {
-            "db": self.db,
-            "count_all_users": self.session.query(sql_func.count(Reader.id)).scalar(),
-            "count_hot_users": self.session.query(sql_func.count(Reader.id))
-            .filter(Reader.access_time > last_week)
-            .scalar(),
-            "IMG": self.cdn_url,
-            "SITE_TITLE": CONF["site_title"],
-        }
-        vals = dict(*args, **kwargs)
-        vals.update(page_vars)
-        vals.update(vars())
-        del vals["self"]
-        self.write(self.render_string(template, **vals))
 
     def commit(self):
         try:
