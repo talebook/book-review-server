@@ -17,3 +17,4 @@ services:
       MYSQL_PASSWORD: brs-is-best
     volumes:
       - /tmp/brs-db:/var/lib/mysql
+      - ./my.cnf:/etc/mysql/my.cnf
