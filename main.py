@@ -44,9 +44,6 @@ def bind_topdir_book_names(cache):
 def make_app():
     auth_db_path = CONF["user_database"]
     logging.debug("Init AuthDB  with [%s]" % auth_db_path)
-    logging.debug("Init Static  with [%s]" % CONF["resource_path"])
-    logging.debug("Init HTML    with [%s]" % CONF["html_path"])
-    logging.debug("Init Nuxtjs  with [%s]" % CONF["nuxt_env_path"])
 
     # build sql session factory
     engine = create_engine(auth_db_path, **CONF["db_engine_args"])

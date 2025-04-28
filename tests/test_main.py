@@ -51,11 +51,8 @@ def setup_server():
     main.CONF["ALLOW_GUEST_PUSH"] = False
     main.CONF["ALLOW_GUEST_DOWNLOAD"] = False
     main.CONF["upload_path"] = "/tmp/"
-    main.CONF["html_path"] = "/tmp/"
     main.CONF["settings_path"] = "/tmp/"
     main.CONF["progress_path"] = "/tmp/"
-    main.CONF["extract_path"] = "/tmp/"
-    main.CONF["nuxt_env_path"] = "/tmp/.env.text"
     main.CONF["installed"] = True
     main.CONF["INVITE_MODE"] = False
     main.CONF["user_database"] = "sqlite:///%s/.unittest.db" % testdir

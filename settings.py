@@ -8,25 +8,12 @@ import os
 settings = {
     'installed'     : True,
     "autoreload"    : True,
-    "xsrf_cookies"  : False,
     "static_host"   : "",
-    "nuxt_env_path" : os.path.join(os.path.dirname(__file__), "../app/.env"),
-    "html_path"     : os.path.join(os.path.dirname(__file__), "../app/dist"),
-    "i18n_path"     : os.path.join(os.path.dirname(__file__), "i18n"),
-    "static_path"   : os.path.join(os.path.dirname(__file__), "../app/dist"),
-    "resource_path" : os.path.join(os.path.dirname(__file__), "resources"),
-    "settings_path" : "/data/books/settings/",
-    "extract_path"  : "/data/books/extract/",
     "cookie_secret" : "cookie_secret",
-    "cookie_expire" : 7*86400,
-    "login_url"     : "/login",
+    "settings_path" : "/data/books/settings/",
     # "user_database" : 'sqlite:////tmp/candle-reader.db',
     "user_database" : 'mysql+pymysql://brs:brs-is-best@mysql:3306/brs',
     "site_title"    : "奇异书屋",
-
-
-    # https://analytics.google.com/
-    "google_analytics_id" : "G-LLF01B5ZZ8",
 
     "db_engine_args": {
         "echo": False,
@@ -42,10 +29,6 @@ settings = {
     'smtp_password'     : "password",
 
     'avatar_service'    : "https://cravatar.cn",
-
-    'ALLOW_REGISTER' : True,
-    'HEADER': '欢迎访问！如果你喜欢此项目，请前往 Github <a target="_blank" href="https://github.com/talebook/talebook"> 给 talebook 点击一个Star！</a>',
-    'FOOTER': '所有资源搜集于互联网，如有侵权请邮件联系。',
 
     'SIGNUP_MAIL_TITLE': u'欢迎注册奇异书屋',
     'SIGNUP_MAIL_CONTENT': u'''
