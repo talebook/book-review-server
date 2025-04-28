@@ -3,7 +3,7 @@
 LATEST := talebook/book-review-server:latest
 VERSION := $(shell git describe --tag)
 
-all: test up
+all: test docker
 
 test: lint
 	rm -f unittest.log
