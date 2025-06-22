@@ -16,5 +16,5 @@ services:
       MYSQL_USER: brs
       MYSQL_PASSWORD: brs-is-best
     volumes:
-      - /tmp/brs-db:/var/lib/mysql
+      - ./brs-db:/var/lib/mysql
       - ./my.cnf:/etc/mysql/my.cnf

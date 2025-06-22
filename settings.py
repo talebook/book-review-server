@@ -23,20 +23,12 @@ settings = {
     "MAX_UPLOAD_SIZE": "100MB",
 
     # See: http://service.mail.qq.com/cgi-bin/help?subtype=1&&no=1001256&&id=28
-    'smtp_server'       : "smtp.talebook.org",
-    'smtp_encryption'   : "TLS",
-    'smtp_username'     : "sender@talebook.org",
-    'smtp_password'     : "password",
+    'smtp_server'       : os.environ.get("SMTP_SERVER", "smtp.talebook.org"),
+    'smtp_encryption'   : os.environ.get("SMTP_ENCRYPTION", "TLS"),
+    'smtp_username'     : os.environ.get("SMTP_USERNAME", "sender@talebook.org"),
+    'smtp_password'     : os.environ.get("SMTP_PASSWORD", "password"),
 
     'avatar_service'    : "https://cravatar.cn",
-
-    'SIGNUP_MAIL_TITLE': u'欢迎注册奇异书屋',
-    'SIGNUP_MAIL_CONTENT': u'''
-Hi, %(nickname)s！
-欢迎注册%(site_title)s，这里虽然是个小小的图书馆，但是希望你找到所爱。
-
-点击链接激活你的账号: %(active_link)s
-''',
 
     'RESET_MAIL_TITLE': u'奇异书屋密码重置',
     'RESET_MAIL_CONTENT': u'''
