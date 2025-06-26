@@ -58,7 +58,7 @@ class MailService(services.AsyncService):
             relay, smtp_port = relay.split(":")
         username = kwargs.get("username", CONF["smtp_username"])
         password = kwargs.get("password", CONF["smtp_password"])
-        encryption = kwargs.get("encryption", CONF["smtp_encryption"])
+        encryption = kwargs.get("encryption", CONF["smtp_encryption"]).lower()
         mail = self.create_mail(sender, to, subject, body, attachment_data, attachment_name)
 
         # connect to smtp server and send mail
