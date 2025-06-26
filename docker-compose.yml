@@ -2,21 +2,9 @@ services:
   server:
     image: talebook/book-review-server
     # restart: always
+    volumes:
+      - ./data/sqlite:/data
     ports:
       - "5002:80"
-    depends_on:
-      - mysql
     env_file:
       - .env
-
-  mysql:
-    image: mysql:8.0
-    # restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: talebook-is-best
-      MYSQL_DATABASE: brs
-      MYSQL_USER: brs
-      MYSQL_PASSWORD: brs-is-best
-    volumes:
-      - ./brs-db:/var/lib/mysql
-      - ./my.cnf:/etc/mysql/my.cnf

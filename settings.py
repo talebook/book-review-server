@@ -11,9 +11,9 @@ settings = {
     "static_host"   : "",
     "cookie_secret" : "cookie_secret",
     "settings_path" : "/data/books/settings/",
-    # "user_database" : 'sqlite:////tmp/candle-reader.db',
-    "user_database" : 'mysql+pymysql://brs:brs-is-best@mysql:3306/brs',
-    "site_title"    : "奇异书屋",
+    "user_database" : 'sqlite:////data/brs.db',
+    #"user_database" : 'mysql+pymysql://brs:brs-is-best@mysql:3306/brs',
+    "site_title"    : "章评系统",
 
     "db_engine_args": {
         "echo": False,
@@ -30,7 +30,7 @@ settings = {
 
     'avatar_service'    : "https://cravatar.cn",
 
-    'RESET_MAIL_TITLE': u'奇异书屋密码重置',
+    'RESET_MAIL_TITLE': u'欢迎使用',
     'RESET_MAIL_CONTENT': u'''
 Hi, %(nickname)s！
 
