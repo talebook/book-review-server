@@ -4,6 +4,7 @@ services:
     # restart: always
     volumes:
       - ./data/sqlite:/data
+      - ./brs.log:/app/brs.log
     ports:
       - "5002:80"
     env_file:

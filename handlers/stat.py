@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
-import re
-
 from handlers.base import BaseHandler
-import tornado.escape
 import loader
 import models
 
