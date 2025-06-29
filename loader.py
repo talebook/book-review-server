@@ -12,6 +12,7 @@ class SettingsLoader(dict):
     def __init__(self, *args, **kwargs):
         super(SettingsLoader, self).__init__(*args, **kwargs)
         self.loadfile()
+        self.load_from_env()
 
     def clear(self):
         for key in list(self.keys()):
@@ -24,6 +25,12 @@ class SettingsLoader(dict):
         if sys.path[0] != p:
             sys.path.insert(0, p)
         return p
+
+    def load_from_env(self):
+        for k in self:
+            v = os.environ.get(k.upper())
+            if v:
+                self[k] = v
 
     def loadfile(self):
         try:
