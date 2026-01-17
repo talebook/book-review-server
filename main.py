@@ -96,25 +96,55 @@ def setup_logging():
 
 
 def main():
-    tornado.options.parse_command_line()
-    setup_logging()
-    app = make_app()
-    http_server = tornado.httpserver.HTTPServer(app, xheaders=True, max_buffer_size=get_upload_size())
     try:
-        http_server.listen(options.port, options.host)
-        logging.info(f"Server started on {options.host or '0.0.0.0'}:{options.port}")
-        tornado.ioloop.IOLoop.instance().start()
-    except OSError as e:
-        if "Address already in use" in str(e):
-            logging.error(f"Error: Address {options.host or '0.0.0.0'}:{options.port} already in use.")
-            logging.error(f"Please try using a different port with --port parameter, e.g., python main.py --port 8081")
-        else:
-            logging.error(f"Error starting server: {e}")
+        # 解析命令行参数
+        tornado.options.parse_command_line()
+        
+        # 设置日志
+        setup_logging()
+        logging.info("Starting server initialization...")
+        
+        # 创建应用
+        app = make_app()
+        
+        # 创建HTTP服务器
+        http_server = tornado.httpserver.HTTPServer(
+            app, 
+            xheaders=True, 
+            max_buffer_size=get_upload_size()
+        )
+        
+        # 获取IOLoop实例
+        ioloop = tornado.ioloop.IOLoop.current()
+        
+        try:
+            # 绑定端口
+            http_server.listen(options.port, options.host)
+            logging.info(f"Server started successfully on {options.host or '0.0.0.0'}:{options.port}")
+            logging.info("Press Ctrl+C to stop the server")
+            
+            # 启动IOLoop
+            ioloop.start()
+        except OSError as e:
+            if "Address already in use" in str(e):
+                logging.error(f"Failed to start server: Address {options.host or '0.0.0.0'}:{options.port} already in use")
+                logging.error(f"Please try a different port with: python main.py --port <new_port>")
+            else:
+                logging.error(f"Failed to start server: {e}")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            logging.info("\nReceived Ctrl+C, shutting down server...")
+            # 停止服务器
+            http_server.stop()
+            # 立即停止IOLoop
+            ioloop.stop()
+            logging.info("Server stopped")
+        except Exception as e:
+            logging.error(f"Unexpected error during server operation: {e}", exc_info=True)
+            sys.exit(1)
+    except Exception as e:
+        logging.error(f"Failed to initialize server: {e}", exc_info=True)
         sys.exit(1)
-    except KeyboardInterrupt:
-        logging.info("Server shutting down...")
-        tornado.ioloop.IOLoop.instance().stop()
-        logging.info("Server stopped gracefully")
 
 
 if __name__ == "__main__":
