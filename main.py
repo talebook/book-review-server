@@ -100,11 +100,21 @@ def main():
     setup_logging()
     app = make_app()
     http_server = tornado.httpserver.HTTPServer(app, xheaders=True, max_buffer_size=get_upload_size())
-    http_server.listen(options.port, options.host)
-    tornado.ioloop.IOLoop.instance().start()
-    from flask.ext.sqlalchemy import _EngineDebuggingSignalEvents
-
-    _EngineDebuggingSignalEvents(app._engine, app.import_name).register()
+    try:
+        http_server.listen(options.port, options.host)
+        logging.info(f"Server started on {options.host or '0.0.0.0'}:{options.port}")
+        tornado.ioloop.IOLoop.instance().start()
+    except OSError as e:
+        if "Address already in use" in str(e):
+            logging.error(f"Error: Address {options.host or '0.0.0.0'}:{options.port} already in use.")
+            logging.error(f"Please try using a different port with --port parameter, e.g., python main.py --port 8081")
+        else:
+            logging.error(f"Error starting server: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logging.info("Server shutting down...")
+        tornado.ioloop.IOLoop.instance().stop()
+        logging.info("Server stopped gracefully")
 
 
 if __name__ == "__main__":
