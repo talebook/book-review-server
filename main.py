@@ -95,70 +95,55 @@ def setup_logging():
         logger.addHandler(console_handler)
 
 
-def main():
-    # 解析命令行参数
-    tornado.options.parse_command_line()
-    
-    # 设置日志
-    setup_logging()
+def start_server():
+    """启动服务器的核心逻辑"""
+    logging.info("Starting server initialization...")
     
     # 创建应用
-    try:
-        logging.info("Starting server initialization...")
-        app = make_app()
-    except Exception as e:
-        logging.error(f"Failed to create application: {e}", exc_info=True)
-        sys.exit(1)
+    app = make_app()
     
     # 创建HTTP服务器
-    try:
-        http_server = tornado.httpserver.HTTPServer(
-            app, 
-            xheaders=True, 
-            max_buffer_size=get_upload_size()
-        )
-    except Exception as e:
-        logging.error(f"Failed to create HTTP server: {e}", exc_info=True)
-        sys.exit(1)
+    http_server = tornado.httpserver.HTTPServer(
+        app, 
+        xheaders=True, 
+        max_buffer_size=get_upload_size()
+    )
     
     # 绑定端口
-    try:
-        http_server.listen(options.port, options.host)
-        logging.info(f"Server started successfully on {options.host or '0.0.0.0'}:{options.port}")
-        logging.info("Press Ctrl+C to stop the server")
-    except OSError as e:
-        if "Address already in use" in str(e):
-            logging.error(f"Failed to bind port: Address {options.host or '0.0.0.0'}:{options.port} already in use")
-            logging.error(f"Please try a different port with: python main.py --port <new_port>")
-        else:
-            logging.error(f"Failed to bind port: {e}")
-        sys.exit(1)
-    except Exception as e:
-        logging.error(f"Failed to bind port: {e}", exc_info=True)
-        sys.exit(1)
+    http_server.listen(options.port, options.host)
+    logging.info(f"Server started successfully on {options.host or '0.0.0.0'}:{options.port}")
+    logging.info("Press Ctrl+C to stop the server")
     
     # 获取IOLoop实例并启动
     ioloop = tornado.ioloop.IOLoop.current()
-    
+    ioloop.start()
+
+
+def main():
     try:
-        # 启动IOLoop
-        ioloop.start()
+        # 解析命令行参数
+        tornado.options.parse_command_line()
+        
+        # 设置日志
+        setup_logging()
+        
+        # 启动服务器
+        start_server()
+        
+    except OSError as e:
+        if "Address already in use" in str(e):
+            logging.error(f"Failed to start server: Address {options.host or '0.0.0.0'}:{options.port} already in use")
+            logging.error(f"Please try a different port with: python main.py --port <new_port>")
+        else:
+            logging.error(f"Failed to start server: {e}")
+        return 1
     except KeyboardInterrupt:
         logging.info("\nReceived Ctrl+C, shutting down server...")
-        # 停止服务器
-        http_server.stop()
-        # 立即停止IOLoop
-        ioloop.stop()
         logging.info("Server stopped")
+        return 0
     except Exception as e:
-        logging.error(f"Unexpected error during server operation: {e}", exc_info=True)
-        # 确保在异常时也尝试清理资源
-        try:
-            http_server.stop()
-            ioloop.stop()
-        except:
-            pass
-        sys.exit(1)
+        logging.error(f"Failed to initialize or run server: {e}", exc_info=True)
+        return 1
 
 
 if __name__ == "__main__":
