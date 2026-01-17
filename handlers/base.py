@@ -89,7 +89,12 @@ class BaseHandler(web.RequestHandler):
 
     def set_secure_cookie(self, key, val):
         self.cookies_cache[key] = val
-        super(BaseHandler, self).set_secure_cookie(key, val)
+        super(BaseHandler, self).set_secure_cookie(
+            key, 
+            val, 
+            samesite="none",
+            secure=True
+        )
         return None
 
     def head(self, *args, **kwargs):
