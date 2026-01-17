@@ -95,16 +95,55 @@ def setup_logging():
         logger.addHandler(console_handler)
 
 
-def main():
-    tornado.options.parse_command_line()
-    setup_logging()
+def start_server():
+    """启动服务器的核心逻辑"""
+    logging.info("Starting server initialization...")
+    
+    # 创建应用
     app = make_app()
-    http_server = tornado.httpserver.HTTPServer(app, xheaders=True, max_buffer_size=get_upload_size())
+    
+    # 创建HTTP服务器
+    http_server = tornado.httpserver.HTTPServer(
+        app, 
+        xheaders=True, 
+        max_buffer_size=get_upload_size()
+    )
+    
+    # 绑定端口
     http_server.listen(options.port, options.host)
-    tornado.ioloop.IOLoop.instance().start()
-    from flask.ext.sqlalchemy import _EngineDebuggingSignalEvents
+    logging.info(f"Server started successfully on {options.host or '0.0.0.0'}:{options.port}")
+    logging.info("Press Ctrl+C to stop the server")
+    
+    # 获取IOLoop实例并启动
+    ioloop = tornado.ioloop.IOLoop.current()
+    ioloop.start()
 
-    _EngineDebuggingSignalEvents(app._engine, app.import_name).register()
+
+def main():
+    try:
+        # 解析命令行参数
+        tornado.options.parse_command_line()
+        
+        # 设置日志
+        setup_logging()
+        
+        # 启动服务器
+        start_server()
+        
+    except OSError as e:
+        if "Address already in use" in str(e):
+            logging.error(f"Failed to start server: Address {options.host or '0.0.0.0'}:{options.port} already in use")
+            logging.error(f"Please try a different port with: python main.py --port <new_port>")
+        else:
+            logging.error(f"Failed to start server: {e}")
+        return 1
+    except KeyboardInterrupt:
+        logging.info("\nReceived Ctrl+C, shutting down server...")
+        logging.info("Server stopped")
+        return 0
+    except Exception as e:
+        logging.error(f"Failed to initialize or run server: {e}", exc_info=True)
+        return 1
 
 
 if __name__ == "__main__":

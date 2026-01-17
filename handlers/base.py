@@ -6,6 +6,7 @@ import base64
 import datetime
 import logging
 import time
+import urllib.parse
 from collections import defaultdict
 from gettext import gettext as _
 
@@ -69,10 +70,13 @@ class BaseHandler(web.RequestHandler):
         if self.current_user:
             userid = self.current_user.id
             email = self.current_user.email
+            
+        # 解码URI，显示中文而不是URL编码
+        decoded_uri = urllib.parse.unquote(self.request.uri)
 
         return '%s %s (%s) "%d %s"' % (
             self.request.method,
-            self.request.uri,
+            decoded_uri,
             self.request.remote_ip,
             userid,
             email,
@@ -85,7 +89,12 @@ class BaseHandler(web.RequestHandler):
 
     def set_secure_cookie(self, key, val):
         self.cookies_cache[key] = val
-        super(BaseHandler, self).set_secure_cookie(key, val)
+        super(BaseHandler, self).set_secure_cookie(
+            key, 
+            val, 
+            samesite="none",
+            secure=True
+        )
         return None
 
     def head(self, *args, **kwargs):
