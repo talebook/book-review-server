@@ -7,7 +7,6 @@ import datetime
 import logging
 import time
 import urllib.parse
-from collections import defaultdict
 from gettext import gettext as _
 
 from tornado import web
@@ -17,7 +16,6 @@ import loader
 # import social_tornado.handlers
 from models import Reader
 
-messages = defaultdict(list)
 CONF = loader.get_settings()
 
 
@@ -45,6 +43,14 @@ def js(func):
                 rsp = ""
         self.prepare_headers()
         self.set_header("Cache-Control", "max-age=0")
+        # 根据err字段设置HTTP状态码
+        if isinstance(rsp, dict):
+            if rsp.get("err") != "ok":
+                # 对于错误响应，返回400状态码
+                self.set_status(400)
+            else:
+                # 对于成功响应，返回200状态码
+                self.set_status(200)
         self.write(rsp)
         self.finish()
         return
@@ -92,8 +98,10 @@ class BaseHandler(web.RequestHandler):
         super(BaseHandler, self).set_secure_cookie(
             key,
             val,
-            samesite="none",
-            secure=True
+            samesite="lax",  # 更安全的SameSite设置
+            secure=True,
+            httponly=True,  # 防止XSS攻击
+            expires_days=7  # 设置过期时间
         )
         return None
 
@@ -107,15 +115,19 @@ class BaseHandler(web.RequestHandler):
         auth_header = self.request.headers.get("Authorization", "")
         if not auth_header.startswith("Basic "):
             return False
-        auth_decoded = base64.decodebytes(auth_header[6:].encode("ascii")).decode("UTF-8")
-        email, password = auth_decoded.split(":", 2)
-        user = self.session.query(Reader).filter(Reader.email == email).first()
-        if not user:
+        try:
+            auth_decoded = base64.decodebytes(auth_header[6:].encode("ascii")).decode("UTF-8")
+            email, password = auth_decoded.split(":", 2)
+            user = self.session.query(Reader).filter(Reader.email == email).first()
+            if not user:
+                return False
+            if not user.get_secure_password(password):
+                return False
+            self.login_user(user)
+            return True
+        except Exception as e:
+            logging.error(f"Basic auth failed: {e}")
             return False
-        if user.get_secure_password(password) != str(user.password):
-            return False
-        self.login_user(user)
-        return True
 
     def set_hosts(self):
         # site_url为完整路径，用于发邮件等
@@ -132,7 +144,14 @@ class BaseHandler(web.RequestHandler):
             self.cdn_url = self.request.protocol + "://" + CONF["static_host"]
 
     def prepare_headers(self):
+        # 更安全的CORS设置，只允许指定来源
+        allowed_origins = CONF.get('allowed_origins', ['*'])
         origin = self.request.headers.get("origin", "*")
+
+        if allowed_origins != ['*']:
+            if origin not in allowed_origins:
+                origin = allowed_origins[0]
+
         self.set_header("Access-Control-Allow-Origin", origin)
         self.set_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
         self.set_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')

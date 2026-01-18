@@ -33,11 +33,11 @@ class UserUpdate(BaseHandler):
         p0 = data.get("password0", "").strip()
         p1 = data.get("password1", "").strip()
         if len(p0) > 0:
-            if user.get_secure_password(p0) != user.password:
+            if not user.get_secure_password(p0):
                 return {"err": "params.password.error", "msg": _(u"密码错误")}
             if len(p1) < 8 or len(p1) > 20 or not re.match(Reader.RE_PASSWORD, p1):
                 return {"err": "params.password.invalid", "msg": _(u"密码无效")}
-            logging.info(f'{user.nickname} 更改密码为 {p1}')
+            logging.info(f'{user.nickname} 更改密码')
             user.set_secure_password(p1)
 
         self.session.add(user)
@@ -106,7 +106,7 @@ class SignIn(BaseHandler):
         user = self.session.query(Reader).filter(Reader.email == email).first()
         if not user:
             return {"err": "params.no_user", "msg": _(u"无此用户")}
-        if user.get_secure_password(password) != user.password:
+        if not user.get_secure_password(password):
             return {"err": "params.invalid", "msg": _(u"用户名或密码错误")}
         if not user.can_login():
             return {"err": "permission", "msg": _(u"无权登录")}
