@@ -163,7 +163,7 @@ class TestWithUserLogin(TestApp):
     def tearDownClass(self):
         _mock_user.stop()
         _mock_mail.stop()
-        _mock_service_async_mode.start()
+        _mock_service_async_mode.stop()
 
 
 class TestUser(TestWithUserLogin):
@@ -194,18 +194,9 @@ class TestUser(TestWithUserLogin):
 
 class TestUserSignUp(TestWithUserLogin):
     @classmethod
-    def setUpClass(self):
-        self.user = _mock_user.start()
-        self.user.return_value = 1
-        self.mail = _mock_mail.start()
-        self.mail.return_value = True
-        self.async_service = _mock_service_async_mode.start()
-        self.async_service.return_value = False
-
-    @classmethod
     def tearDownClass(self):
         self.delete_user()
-        _mock_mail.stop()
+        super(TestUserSignUp, self).tearDownClass()
 
     @classmethod
     def get_user(self):
