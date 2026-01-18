@@ -19,9 +19,14 @@ CONF = loader.get_settings()
 
 class UserUpdate(BaseHandler):
     @js
+    @auth
     def post(self):
         data = tornado.escape.json_decode(self.request.body)
         user = self.current_user
+        # 确保user不是None
+        if not user:
+            return {"err": "user.need_login", "msg": _(u"请先登录")}
+        
         nickname = data.get("nickname", "")
         if nickname:
             nickname = nickname.strip()
