@@ -1,7 +1,7 @@
 services:
   server:
     image: talebook/book-review-server
-    # restart: always
+    restart: always
     volumes:
       - ./data/sqlite:/data
       - ./brs.log:/app/brs.log
