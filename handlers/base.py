@@ -98,10 +98,10 @@ class BaseHandler(web.RequestHandler):
         super(BaseHandler, self).set_secure_cookie(
             key,
             val,
-            samesite="lax",  # 更安全的SameSite设置
-            secure=True,
-            httponly=True,  # 防止XSS攻击
-            expires_days=7  # 设置过期时间
+            samesite="none",  # 支持跨站调用
+            secure=True,        # SameSite=None必须同时设置secure=True
+            httponly=True,      # 防止XSS攻击
+            expires_days=30     # 设置30天过期时间
         )
         return None
 
@@ -147,10 +147,27 @@ class BaseHandler(web.RequestHandler):
         # 更安全的CORS设置，只允许指定来源
         allowed_origins = CONF.get('allowed_origins', ['*'])
         origin = self.request.headers.get("origin", "*")
-
+        
+        # 处理CORS Origin，支持通配符
         if allowed_origins != ['*']:
-            if origin not in allowed_origins:
-                origin = allowed_origins[0]
+            # 检查origin是否在允许列表中，支持通配符
+            origin_allowed = False
+            for allowed_origin in allowed_origins:
+                if allowed_origin == '*':
+                    origin_allowed = True
+                    break
+                elif allowed_origin.startswith('*.'):
+                    # 处理通配符情况，如*.talebook.org
+                    domain = allowed_origin[2:]  # 去掉*.前缀
+                    if origin.endswith(domain) or origin == domain:
+                        origin_allowed = True
+                        break
+                elif origin == allowed_origin:
+                    origin_allowed = True
+                    break
+            
+            if not origin_allowed:
+                origin = allowed_origins[0] if allowed_origins else '*'
 
         self.set_header("Access-Control-Allow-Origin", origin)
         self.set_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE')
