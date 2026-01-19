@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
-import hashlib
-import time
+import bcrypt
 import re
+import logging
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship, declarative_base
@@ -12,19 +12,6 @@ import loader
 
 CONF = loader.get_settings()
 Base = declarative_base()
-
-
-def mksalt():
-    import random
-    import string
-
-    # for python3, just use: crypt.mksalt(crypt.METHOD_SHA512)
-    saltchars = string.ascii_letters + string.digits + "./"
-    salt = []
-    for c in range(32):
-        idx = int(random.random() * 10000) % len(saltchars)
-        salt.append(saltchars[idx])
-    return "".join(salt)
 
 
 def to_dict(self):
@@ -47,15 +34,14 @@ class Reader(Base):
     SQLITE_MAX_LENGTH = 32 * 1024.0
 
     RE_EMAIL = r"[^@]+@[^@]+\.[^@]+"
-    RE_PASSWORD = r'[a-zA-Z0-9!@#$%^&*()_+\-=[\]{};\':",./<>?\|]*'
+    RE_PASSWORD = r'[a-zA-Z0-9!@#$%^&*()_+\-=[\]{};:",./<>?\|]*'
 
     __tablename__ = "readers"
     id = Column(Integer, primary_key=True)
     email = Column(String(200), unique=True)
     avatar = Column(String(200))
     nickname = Column(String(100), unique=True)
-    password = Column(String(200), default="")
-    salt = Column(String(200))
+    password = Column(String(255), default="")
     is_admin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     permission = Column(String(100), default="")
@@ -68,19 +54,28 @@ class Reader(Base):
         return "<id=%d, email=%s>" % (self.id, self.email)
 
     def reset_password(self):
-        s = "%s%s%s" % (self.email, self.create_time.strftime("%s"), time.time())
-        p = hashlib.md5(s.encode("UTF-8")).hexdigest()[:16]
+        import secrets
+        import string
+
+        # 生成更安全的随机密码
+        alphabet = string.ascii_letters + string.digits + string.punctuation
+        p = ''.join(secrets.choice(alphabet) for i in range(16))
         self.set_secure_password(p)
         return p
 
     def get_secure_password(self, raw_password):
-        p1 = hashlib.sha256(raw_password.encode("UTF-8")).hexdigest()
-        p2 = hashlib.sha256((self.salt + p1).encode("UTF-8")).hexdigest()
-        return p2
+        # 使用bcrypt验证密码
+        if not self.password:
+            return False
+        try:
+            return bcrypt.checkpw(raw_password.encode('UTF-8'), self.password.encode('UTF-8'))
+        except Exception as e:
+            logging.error(f"Password verification error: {e}")
+            return False
 
     def set_secure_password(self, raw_password):
-        self.salt = mksalt()
-        self.password = self.get_secure_password(raw_password)
+        # 使用bcrypt哈希密码，自动生成盐值
+        self.password = bcrypt.hashpw(raw_password.encode('UTF-8'), bcrypt.gensalt()).decode('UTF-8')
 
     def set_permission(self, operations):
         ALL = "delprsuv"

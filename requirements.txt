@@ -2,6 +2,7 @@ tornado==6.4.2
 bs4
 chardet
 sqlalchemy
+bcrypt
 
 # build-in support for MYSQL
 pymysql
