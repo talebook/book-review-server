@@ -26,7 +26,7 @@ class UserUpdate(BaseHandler):
         # 确保user不是None
         if not user:
             return {"err": "user.need_login", "msg": _(u"请先登录")}
-        
+
         nickname = data.get("nickname", "")
         if nickname:
             nickname = nickname.strip()

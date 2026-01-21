@@ -147,7 +147,7 @@ class BaseHandler(web.RequestHandler):
         # 更安全的CORS设置，只允许指定来源
         allowed_origins = CONF.get('allowed_origins', ['*'])
         origin = self.request.headers.get("origin", "*")
-        
+
         # 处理CORS Origin，支持通配符
         if allowed_origins != ['*']:
             # 检查origin是否在允许列表中，支持通配符
@@ -165,7 +165,7 @@ class BaseHandler(web.RequestHandler):
                 elif origin == allowed_origin:
                     origin_allowed = True
                     break
-            
+
             if not origin_allowed:
                 origin = allowed_origins[0] if allowed_origins else '*'
 
