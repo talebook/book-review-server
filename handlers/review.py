@@ -2,14 +2,19 @@
 # -*- coding: UTF-8 -*-
 
 import datetime
+import hmac
+import urllib.parse
 from gettext import gettext as _
 
 import tornado.escape
+import loader
 from handlers.base import BaseHandler, auth, js
 from models import Review, ReviewBook, ReviewChapter, ReviewType
 
 from sqlalchemy import func, or_
 from utils import super_strip
+
+CONF = loader.get_settings()
 
 # 引用正文只用于「一行」展示，发表时截断，避免千万级数据下的存储膨胀
 REFER_TEXT_MAX = 80
@@ -254,6 +259,60 @@ class ReviewBookList(BaseHandler):
         return {"err": "ok", "data": {"list": data, "total": total, "page": page, "size": size}}
 
 
+class ReviewCommentExport(BaseHandler):
+    """Export text comments incrementally for trusted integrations."""
+
+    def write_json(self, status, payload):
+        self.set_status(status)
+        self.set_header("Content-Type", "application/json; charset=UTF-8")
+        self.write(payload)
+
+    def get(self):
+        configured_token = str(CONF.get("plugin_export_token", ""))
+        authorization = self.request.headers.get("Authorization", "")
+        prefix = "Bearer "
+        supplied_token = authorization[len(prefix):] if authorization.startswith(prefix) else ""
+        if not configured_token or not hmac.compare_digest(supplied_token, configured_token):
+            self.write_json(401, {"err": "auth.invalid", "msg": _("无效的访问令牌")})
+            return
+
+        try:
+            cursor = max(0, int(self.get_argument("cursor", "0") or "0"))
+            limit = min(200, max(1, int(self.get_argument("limit", "100") or "100")))
+        except ValueError:
+            self.write_json(400, {"err": "params.invalid", "msg": _("参数错误")})
+            return
+
+        rows = (
+            self.session.query(Review)
+            .filter(Review.type == ReviewType.text, Review.id > cursor)
+            .order_by(Review.id.asc())
+            .limit(limit)
+            .all()
+        )
+        comments = []
+        for row in rows:
+            query = urllib.parse.urlencode(
+                {"book_id": row.book_id, "chapter_id": row.chapter_id, "segment_id": row.segment_id}
+            )
+            comments.append(
+                {
+                    "id": str(row.id),
+                    "book_id": str(row.book_id),
+                    "chapter_id": str(row.chapter_id),
+                    "segment_id": str(row.segment_id),
+                    "content": row.content or "",
+                    "summary": row.content or "",
+                    "created_at": row.create_time.isoformat() if row.create_time else "",
+                    "updated_at": row.update_time.isoformat() if row.update_time else "",
+                    "url": "%s/api/review/list?%s" % (self.site_url, query),
+                }
+            )
+
+        next_cursor = str(rows[-1].id if rows else cursor)
+        self.write_json(200, {"err": "ok", "comments": comments, "next_cursor": next_cursor})
+
+
 def routes():
     return [
         (r"/api/review/book", ReviewGetBook),
@@ -262,4 +321,5 @@ def routes():
         (r"/api/review/list", ReviewList),
         (r"/api/review/add", ReviewAdd),
         (r"/api/review/me", ReviewMe),
+        (r"/api/v1/comments", ReviewCommentExport),
     ]
