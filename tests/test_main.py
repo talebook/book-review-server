@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 import base64
+import datetime
 import json
 import os
 import sys
@@ -336,6 +337,78 @@ class TestReviewBookList(TestApp):
             db.query(models.Review).filter(models.Review.book_id == book.id).delete()
             db.query(models.ReviewBook).filter(models.ReviewBook.id == book.id).delete()
             db.commit()
+
+
+class TestReviewCommentExport(TestApp):
+    def setUp(self):
+        super().setUp()
+        self.old_token = main.CONF.get("plugin_export_token", "")
+        main.CONF["plugin_export_token"] = "export-test-token"
+        db = get_db()
+        now = datetime.datetime(2026, 8, 17, 12, 0, 0)
+        self.rows = [
+            models.Review(
+                book_id=91001, chapter_id=92001, segment_id=index,
+                type=review_type, content=content, user_id=1,
+                create_time=now, update_time=now,
+            )
+            for index, review_type, content in (
+                (1, models.ReviewType.text, "first export comment"),
+                (2, models.ReviewType.like, "not exported"),
+                (3, models.ReviewType.text, "second export comment"),
+            )
+        ]
+        db.add_all(self.rows)
+        db.commit()
+        self.row_ids = [row.id for row in self.rows]
+
+    def tearDown(self):
+        db = get_db()
+        db.query(models.Review).filter(models.Review.id.in_(self.row_ids)).delete(synchronize_session=False)
+        db.commit()
+        main.CONF["plugin_export_token"] = self.old_token
+        super().tearDown()
+
+    @staticmethod
+    def auth_headers(token="export-test-token"):
+        return {"Authorization": "Bearer " + token}
+
+    def test_requires_configured_bearer_token(self):
+        rsp = self.fetch("/api/v1/comments")
+        self.assertEqual(rsp.code, 401)
+        self.assertEqual(json.loads(rsp.body)["err"], "auth.invalid")
+
+        rsp = self.fetch("/api/v1/comments", headers=self.auth_headers("wrong"))
+        self.assertEqual(rsp.code, 401)
+
+        main.CONF["plugin_export_token"] = ""
+        rsp = self.fetch("/api/v1/comments", headers=self.auth_headers())
+        self.assertEqual(rsp.code, 401)
+
+    def test_exports_only_text_comments_with_cursor_pagination(self):
+        cursor = self.row_ids[0] - 1
+        first = self.json(
+            "/api/v1/comments?cursor=%s&limit=1" % cursor,
+            headers=self.auth_headers(),
+        )
+        self.assertEqual(first["err"], "ok")
+        self.assertEqual([row["content"] for row in first["comments"]], ["first export comment"])
+        self.assertEqual(first["next_cursor"], str(self.row_ids[0]))
+
+        second = self.json(
+            "/api/v1/comments?cursor=%s&limit=200" % first["next_cursor"],
+            headers=self.auth_headers(),
+        )
+        self.assertEqual([row["content"] for row in second["comments"]], ["second export comment"])
+        exported = second["comments"][0]
+        self.assertEqual(exported["id"], str(self.row_ids[2]))
+        self.assertEqual(exported["book_id"], "91001")
+        self.assertEqual(exported["chapter_id"], "92001")
+        self.assertEqual(exported["segment_id"], "3")
+        self.assertEqual(exported["summary"], "second export comment")
+        self.assertEqual(exported["created_at"], "2026-08-17T12:00:00")
+        self.assertIn("/api/review/list?book_id=91001&chapter_id=92001&segment_id=3", exported["url"])
+        self.assertEqual(second["next_cursor"], str(self.row_ids[2]))
 
 
 class TestReviewAddTruncate(TestWithUserLogin):

@@ -30,6 +30,10 @@ settings = {
 
     'avatar_service'    : "https://cravatar.cn",
 
+    # Bearer token for the read-only incremental comment export API.
+    # Leave empty to keep the endpoint disabled.
+    'plugin_export_token': '',
+
     'RESET_MAIL_TITLE': u'欢迎使用',
     'RESET_MAIL_CONTENT': u'''
 Hi, %(nickname)s！
