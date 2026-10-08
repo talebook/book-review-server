@@ -9,7 +9,7 @@ from gettext import gettext as _
 import tornado.escape
 import loader
 from handlers.base import BaseHandler, auth, js
-from models import Review, ReviewBook, ReviewChapter, ReviewType
+from models import Review, ReviewBook, ReviewChapter, ReviewType, ReviewVote
 
 from sqlalchemy import func, or_
 from utils import super_strip
@@ -114,62 +114,182 @@ class ReviewList(BaseHandler):
 
 
 class ReviewAdd(BaseHandler):
-    """发表评论"""
+    """发表评论或回复。只接受下列字段，其他字段（如 refer_text）忽略。"""
 
     @js
     @auth
     def post(self):
-        data = tornado.escape.json_decode(self.request.body)
-        if not data:
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+        except (TypeError, ValueError):
+            data = None
+        if not isinstance(data, dict) or not data.get("book_id") or not str(data.get("content") or "").strip():
             return {"err": "params.invalid", "msg": _("参数错误")}
 
-        book_id = data['book_id']
-        chapter_name = data['chapter_name']
-        del data['chapter_name']
+        book_id = int(data["book_id"])
+        root = None
+        if data.get("root_id"):
+            # 回复：挂在同一本书的顶层评论下，位置跟随主评论。
+            root = self.session.query(Review).get(int(data["root_id"]))
+            if root is None or root.book_id != book_id or root.root_id:
+                return {"err": "review.not_found", "msg": _("要回复的评论不存在")}
+            quote_id = int(data.get("quote_id") or root.id)
+            quote = self.session.query(Review).get(quote_id)
+            if quote is None or (quote.id != root.id and quote.root_id != root.id):
+                return {"err": "review.not_found", "msg": _("要回复的评论不存在")}
 
-        # 查一下对应的章节信息是否存在
-        name = ReviewChapter.clean_title(chapter_name)
-        q = self.session.query(ReviewChapter)
-        q = q.filter(ReviewChapter.book_id == book_id)
-        q = q.filter(or_(ReviewChapter.title == name, ReviewChapter.alias == chapter_name))
-        chapter = q.first()
+        if root is None:
+            chapter_name = str(data.get("chapter_name") or "")
+            name = ReviewChapter.clean_title(chapter_name)
+            q = self.session.query(ReviewChapter)
+            q = q.filter(ReviewChapter.book_id == book_id)
+            q = q.filter(or_(ReviewChapter.title == name, ReviewChapter.alias == chapter_name))
+            chapter = q.first()
+            if chapter is None:
+                chapter = ReviewChapter(book_id=book_id, title=name, alias=chapter_name)
+                self.session.add(chapter)
+                self.session.flush()
+            chapter_id, segment_id, cfi = chapter.id, int(data.get("segment_id") or 0), str(data.get("cfi") or "")
+        else:
+            chapter_id, segment_id, cfi = root.chapter_id, root.segment_id, root.cfi
 
-        if chapter is None:
-            chapter = ReviewChapter(book_id=book_id, title=name, alias=chapter_name)
-            self.session.add(chapter)
-
-        n = (
-            self.session.query(Review)
-            .filter(
-                Review.book_id == book_id,
-                Review.chapter_id == chapter.id,
-                Review.segment_id == data["segment_id"],
-            )
-            .count()
+        now = datetime.datetime.now()
+        review = Review(
+            book_id=book_id,
+            chapter_id=chapter_id,
+            segment_id=segment_id,
+            cfi=cfi[:255],
+            type=1,
+            kind="book_comment" if data.get("kind") == "book_comment" and root is None else "note",
+            content=str(data["content"])[:1024],
+            refer_text=str(data.get("refer_text") or "")[:REFER_TEXT_MAX],
+            geo=self.request.remote_ip,
+            user_id=self.current_user.id,
+            create_time=now,
+            update_time=now,
+            root_id=root.id if root else None,
+            quote_id=quote_id if root else None,
         )
-
-        review = Review(**data)
-        if review.refer_text:
-            review.refer_text = review.refer_text[:REFER_TEXT_MAX]
-        review.level = n + 1
-        review.chapter_id = chapter.id
-        review.geo = self.request.remote_ip
-        review.user_id = self.current_user.id
-        review.create_time = datetime.datetime.now()
-        review.update_time = review.create_time
+        review.level = (
+            self.session.query(Review)
+            .filter(Review.book_id == book_id, Review.chapter_id == chapter_id, Review.segment_id == segment_id)
+            .count()
+            + 1
+        )
         self.session.add(review)
-
-        if review.quote_id:
-            review.quote.update_time = datetime.datetime.now()
-            self.session.add(review.quote)
-
-        if review.root_id:
-            review.root.update_time = datetime.datetime.now()
-            self.session.add(review.root)
+        if root is not None:
+            root.update_time = now
+            if quote.id != root.id:
+                quote.update_time = now
 
         if not self.commit():
             return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
         return {"err": "ok", "data": review.to_full_dict(self.current_user)}
+
+
+class ReviewOwnedMixin:
+    def _owned_review(self):
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+            review = self.session.query(Review).get(int(data.get("review_id")))
+        except (TypeError, ValueError, AttributeError):
+            return None, None
+        if review is None or review.user_id != self.current_user.id:
+            return None, data
+        return review, data
+
+
+class ReviewUpdate(ReviewOwnedMixin, BaseHandler):
+    """修改自己的评论内容。"""
+
+    @js
+    @auth
+    def post(self):
+        review, data = self._owned_review()
+        if review is None:
+            return {"err": "review.not_found", "msg": _("评论不存在")}
+        content = str((data or {}).get("content") or "").strip()
+        if not content:
+            return {"err": "params.invalid", "msg": _("参数错误")}
+        review.content = content[:1024]
+        review.update_time = datetime.datetime.now()
+        if not self.commit():
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
+        return {"err": "ok", "data": review.to_full_dict(self.current_user)}
+
+
+class ReviewDelete(ReviewOwnedMixin, BaseHandler):
+    """删除自己的评论：主评论连同全部回复，回复连同回复它的回复；投票一并删除。"""
+
+    @js
+    @auth
+    def post(self):
+        review, _data = self._owned_review()
+        if review is None:
+            return {"err": "review.not_found", "msg": _("评论不存在")}
+        if review.root_id:
+            # 收集直接或间接回复这条回复的记录。
+            replies = self.session.query(Review).filter(Review.root_id == review.root_id).all()
+            ids, changed = {review.id}, True
+            while changed:
+                changed = False
+                for item in replies:
+                    if item.id not in ids and item.quote_id in ids:
+                        ids.add(item.id)
+                        changed = True
+        else:
+            ids = {review.id} | {item.id for item in self.session.query(Review.id).filter(Review.root_id == review.id)}
+        self.session.query(ReviewVote).filter(ReviewVote.review_id.in_(ids)).delete(synchronize_session=False)
+        # 先断开回复之间的引用，再删除，避免外键顺序问题。
+        self.session.query(Review).filter(Review.id.in_(ids)).update(
+            {Review.quote_id: None, Review.root_id: None}, synchronize_session=False
+        )
+        self.session.query(Review).filter(Review.id.in_(ids)).delete(synchronize_session=False)
+        if not self.commit():
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
+        return {"err": "ok", "data": {"deleted": len(ids)}}
+
+
+class ReviewVoteHandler(BaseHandler):
+    """赞（1）、踩（-1）或取消（0）。每人每条一票，计数随之更新。"""
+
+    @js
+    @auth
+    def post(self):
+        try:
+            data = tornado.escape.json_decode(self.request.body)
+            review = self.session.query(Review).get(int(data.get("review_id")))
+            value = int(data.get("value"))
+        except (TypeError, ValueError, AttributeError):
+            return {"err": "params.invalid", "msg": _("参数错误")}
+        if review is None:
+            return {"err": "review.not_found", "msg": _("评论不存在")}
+        if value not in (1, -1, 0):
+            return {"err": "params.invalid", "msg": _("参数错误")}
+        user_id = self.current_user.id
+        vote = self.session.query(ReviewVote).filter(ReviewVote.review_id == review.id, ReviewVote.user_id == user_id).first()
+        if value == 0:
+            if vote:
+                self.session.delete(vote)
+        elif vote:
+            vote.value = value
+        else:
+            self.session.add(ReviewVote(review_id=review.id, user_id=user_id, value=value))
+        self.session.flush()
+        counts = dict(
+            self.session.query(ReviewVote.value, func.count(ReviewVote.id))
+            .filter(ReviewVote.review_id == review.id)
+            .group_by(ReviewVote.value)
+            .all()
+        )
+        review.like_count = counts.get(1, 0)
+        review.dislike_count = counts.get(-1, 0)
+        if not self.commit():
+            return {"err": "db.error", "msg": _(u"数据库操作异常，请重试")}
+        return {
+            "err": "ok",
+            "data": {"likeCount": review.like_count, "dislikeCount": review.dislike_count, "userVote": value},
+        }
 
 
 class ReviewMe(BaseHandler):
@@ -320,6 +440,9 @@ def routes():
         (r"/api/review/summary", ReviewSummary),
         (r"/api/review/list", ReviewList),
         (r"/api/review/add", ReviewAdd),
+        (r"/api/review/update", ReviewUpdate),
+        (r"/api/review/delete", ReviewDelete),
+        (r"/api/review/vote", ReviewVoteHandler),
         (r"/api/review/me", ReviewMe),
         (r"/api/v1/comments", ReviewCommentExport),
     ]

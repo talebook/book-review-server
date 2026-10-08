@@ -462,6 +462,76 @@ class TestJsonResponse(TestApp):
         self.assertHeaders(f.rsp_headers)
 
 
+class TestReviewSync(TestApp):
+    """Talebook 同步过来的评论、回复、修改、删除与投票。"""
+
+    @classmethod
+    def setUpClass(cls):
+        # 用自己的登录桩，不和其他用例共用全局 patch。
+        cls.patcher = mock.patch.object(BaseHandler, "user_id", return_value=1)
+        cls.user = cls.patcher.start()
+        models.reset_reviews(_app._engine)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.patcher.stop()
+
+    def post(self, url, body):
+        return self.json(url, method="POST", body=json.dumps(body))
+
+    def add(self, **fields):
+        data = {"book_id": 7, "chapter_name": "第一章", "segment_id": 0, "cfi": "epubcfi(/6/4!/4/2)", "content": "评论",
+                "refer_text": "talebook 会发的多余字段", "kind": "note"}
+        data.update(fields)
+        return self.post("/api/review/add", data)
+
+    def test_add_reply_update_vote_and_cascade_delete(self):
+        root = self.add(content="主评论")
+        self.assertEqual(root["err"], "ok")
+        root_id = root["data"]["reviewId"]
+        book = self.add(content="整书评论", kind="book_comment")
+        self.assertEqual(book["data"]["kind"], "book_comment")
+
+        reply = self.add(content="回复", root_id=root_id, quote_id=root_id)
+        self.assertEqual(reply["err"], "ok")
+        self.assertEqual(reply["data"]["rootReviewId"], root_id)
+        nested = self.add(content="回复的回复", root_id=root_id, quote_id=reply["data"]["reviewId"])
+        self.assertEqual(nested["data"]["quoteReviewId"], reply["data"]["reviewId"])
+        # 回复对象不属于该主评论时拒绝。
+        self.assertEqual(self.add(content="错位", root_id=root_id, quote_id=book["data"]["reviewId"])["err"], "review.not_found")
+
+        updated = self.post("/api/review/update", {"review_id": root_id, "content": "改过的主评论"})
+        self.assertEqual(updated["data"]["content"], "改过的主评论")
+
+        vote = self.post("/api/review/vote", {"review_id": root_id, "value": 1})
+        self.assertEqual(vote["data"], {"likeCount": 1, "dislikeCount": 0, "userVote": 1})
+        vote = self.post("/api/review/vote", {"review_id": root_id, "value": -1})
+        self.assertEqual(vote["data"], {"likeCount": 0, "dislikeCount": 1, "userVote": -1})
+        vote = self.post("/api/review/vote", {"review_id": root_id, "value": 0})
+        self.assertEqual(vote["data"]["dislikeCount"], 0)
+        self.post("/api/review/vote", {"review_id": reply["data"]["reviewId"], "value": 1})
+
+        # 删除回复连同回复它的回复。
+        d = self.post("/api/review/delete", {"review_id": reply["data"]["reviewId"]})
+        self.assertEqual(d["data"]["deleted"], 2)
+        again = self.add(content="再回复", root_id=root_id)
+        # 删除主评论连同全部回复与投票。
+        d = self.post("/api/review/delete", {"review_id": root_id})
+        self.assertEqual(d["data"]["deleted"], 2)
+        session = get_db()
+        self.assertIsNone(session.query(models.Review).get(again["data"]["reviewId"]))
+        self.assertEqual(session.query(models.ReviewVote).count(), 0)
+
+    def test_only_the_author_can_update_or_delete(self):
+        root = self.add(content="别人的评论")["data"]["reviewId"]
+        self.user.return_value = 2
+        try:
+            self.assertEqual(self.post("/api/review/update", {"review_id": root, "content": "篡改"})["err"], "review.not_found")
+            self.assertEqual(self.post("/api/review/delete", {"review_id": root})["err"], "review.not_found")
+        finally:
+            self.user.return_value = 1
+
+
 def setUpModule():
     os.environ["ASYNC_TEST_TIMEOUT"] = "60"
     setup_server()
