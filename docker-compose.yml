@@ -1,6 +1,6 @@
 services:
   server:
-    image: talebook/book-review-server
+    image: ghcr.io/talebook/book-review-server:latest
     restart: always
     volumes:
       - ./data/sqlite:/data
