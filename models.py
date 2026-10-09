@@ -5,7 +5,7 @@ import bcrypt
 import re
 import logging
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship, declarative_base
 
 import loader
@@ -179,6 +179,7 @@ class Review(Base):
     cfi = Column(String(255), default="")
     cfi_base = Column(String(255), default="")
     type = Column(Integer, default=0)  # ReviewType：文字、点赞、踩
+    kind = Column(String(32), default="note")  # note 文字评论 / book_comment 整书评论；回复也是 note
     level = Column(Integer, default=0)  # 评论楼层
     content = Column(String(1024), default="")  # 评论内容
     refer_text = Column(String(255), default="")  # 被评论的书籍正文片段（发表时截断为一行的量，省存储）
@@ -225,6 +226,7 @@ class Review(Base):
         d["cfi"] = row.cfi
         d["segmentId"] = row.segment_id
         d["type"] = row.type
+        d["kind"] = row.kind or "note"
         d["geo"] = row.geo
         d["level"] = row.level
         d["likeCount"] = row.like_count
@@ -249,5 +251,24 @@ class Review(Base):
         return d
 
 
+class ReviewVote(Base):
+    """读者对一条评论的赞（1）或踩（-1），每人每条一票。"""
+
+    __tablename__ = "review_votes"
+    __table_args__ = (UniqueConstraint("review_id", "user_id", name="uq_review_vote_user"),)
+    id = Column(Integer, primary_key=True)
+    review_id = Column(Integer, ForeignKey("reviews.id"), index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("readers.id"), index=True, nullable=False)
+    value = Column(Integer, nullable=False)
+
+
 def user_syncdb(engine):
     Base.metadata.create_all(engine)
+
+
+def reset_reviews(engine):
+    """清空评论数据并按新结构重建 reviews 与 review_votes（旧数据不迁移）。"""
+    ReviewVote.__table__.drop(engine, checkfirst=True)
+    Review.__table__.drop(engine, checkfirst=True)
+    Base.metadata.create_all(engine)
+

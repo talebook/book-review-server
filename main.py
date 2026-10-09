@@ -22,6 +22,7 @@ CONF = loader.get_settings()
 define("host", default="", type=str, help=_("The host address on which to listen"))
 define("port", default=8080, type=int, help=_("The port on which to listen."))
 define("syncdb", default=False, type=bool, help=_("Create all tables"))
+define("reset_reviews", default=False, type=bool, help=_("Drop all reviews and votes, then recreate the tables"))
 
 
 def safe_filename(filename):
@@ -48,6 +49,12 @@ def make_app():
     # build sql session factory
     engine = create_engine(auth_db_path, **CONF["db_engine_args"])
     ScopedSession = scoped_session(sessionmaker(bind=engine, autoflush=True, autocommit=False))
+
+    if options.reset_reviews:
+        # 评论结构升级时使用：清空全部评论与投票（旧数据不迁移），只执行一次。
+        models.reset_reviews(engine)
+        logging.info("Reviews reset")
+        sys.exit(0)
 
     if options.syncdb:
         models.user_syncdb(engine)
