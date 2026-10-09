@@ -1,6 +1,15 @@
 # book-review-server
 章评服务
 
+## Docker 部署
+
+镜像发布在 GitHub Container Registry：`ghcr.io/talebook/book-review-server`。合并进 `main` 后由 `.github/workflows/docker.yml` 自动构建并推送 `latest`（同时带 `sha-<短提交号>` 标签，便于回退），推送 `v*` 标签时另推同名版本。
+
+```bash
+docker compose pull        # 拉取最新镜像
+docker compose up -d       # 启动或更新
+```
+
 ## Talebook 插件导出
 
 设置环境变量 `PLUGIN_EXPORT_TOKEN` 后，Talebook 可以通过只读接口增量导入文字章评：
@@ -26,4 +35,11 @@ Talebook 是评论的权威存储，BRS 保存它同步过来的公开评论副�
 
 以上接口均需先 `POST /api/user/sign_in` 登录。
 
-升级到这一版本时，评论结构有变化且旧数据不迁移，需要执行一次 `python3 main.py --reset_reviews` 清空评论与投票并重建表。
+升级到这一版本时，评论结构有变化且旧数据不迁移，需要执行一次 `python3 main.py --reset_reviews` 清空评论与投票并重建表（账号数据保留）。用 Docker 部署时，先停服务再在新镜像里执行：
+
+```bash
+docker compose pull
+docker compose stop server
+docker compose run --rm --entrypoint python3 server main.py --reset_reviews
+docker compose up -d server
+```

@@ -1,6 +1,6 @@
 .PHONY: all build push test
 
-LATEST := talebook/book-review-server:latest
+LATEST := ghcr.io/talebook/book-review-server:latest
 VERSION := $(shell git describe --tag)
 
 all: test docker
